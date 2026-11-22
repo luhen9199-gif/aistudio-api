@@ -743,7 +743,16 @@ class BrowserSession:
                     log.debug(f"[timing] botguard captured after {i+1}s, total {_t.time()-_t0:.1f}s")
                     return page
 
-            raise RuntimeError("BotGuardService capture timeout")
+            try:
+                state = page.evaluate("""() => ({
+                    bg_hooked: !!window.__bg_hooked,
+                    bg_service: !!window.__bg_service,
+                    makerSuite: !!window.default_MakerSuite,
+                    textarea: !!document.querySelector('textarea')
+                })""")
+            except Exception as exc:
+                state = {"error": str(exc)}
+            raise RuntimeError(f"BotGuardService capture timeout; state={state}")
         finally:
             page.remove_listener("request", on_request)
             self._restore_textarea_value_sync(textarea, original_text)
