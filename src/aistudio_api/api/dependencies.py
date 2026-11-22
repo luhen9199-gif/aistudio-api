@@ -1,14 +1,21 @@
+
 """Shared FastAPI dependencies."""
 
 from __future__ import annotations
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, Security
+from fastapi.security import APIKeyHeader
 
 from aistudio_api.config import settings
-
 from aistudio_api.infrastructure.gateway.client import AIStudioClient
 
 from .state import runtime_state
+
+
+_api_key_header = APIKeyHeader(
+    name="x-api-key",
+    auto_error=False,
+)
 
 
 def _extract_request_token(request: Request) -> str | None:
@@ -28,11 +35,14 @@ def _extract_request_token(request: Request) -> str | None:
     return token or None
 
 
-def require_api_key(request: Request) -> None:
+def require_api_key(
+    request: Request,
+    api_key: str | None = Security(_api_key_header),
+) -> None:
     if not settings.auth_enabled:
         return
 
-    token = _extract_request_token(request)
+    token = (api_key or "").strip() or _extract_request_token(request)
     if token in settings.api_keys:
         return
 
@@ -45,19 +55,28 @@ def require_api_key(request: Request) -> None:
 
 def get_client() -> AIStudioClient:
     if runtime_state.client is None:
-        raise HTTPException(503, detail={"message": "Client not initialized", "type": "service_unavailable"})
+        raise HTTPException(
+            503,
+            detail={"message": "Client not initialized", "type": "service_unavailable"},
+        )
     return runtime_state.client
 
 
 def get_busy_lock():
     if runtime_state.busy_lock is None:
-        raise HTTPException(503, detail={"message": "Server not ready", "type": "service_unavailable"})
+        raise HTTPException(
+            503,
+            detail={"message": "Server not ready", "type": "service_unavailable"},
+        )
     return runtime_state.busy_lock
 
 
 def get_account_service():
     if runtime_state.account_service is None:
-        raise HTTPException(503, detail={"message": "Account service not initialized", "type": "service_unavailable"})
+        raise HTTPException(
+            503,
+            detail={"message": "Account service not initialized", "type": "service_unavailable"},
+        )
     return runtime_state.account_service
 
 
