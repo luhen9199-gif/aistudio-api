@@ -69,7 +69,6 @@ async def lifespan(app: FastAPI):
         rotator.mode,
         len(account_store.list_accounts()),
     )
-
     # 后台预热浏览器，避免首次请求延迟
     warmup_task = None
     async def _warmup():
@@ -83,6 +82,26 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down")
     if warmup_task and not warmup_task.done():
         warmup_task.cancel()
+    if runtime_state.client is not None:
+        await runtime_state.client.close()
+    runtime_state.client = None
+    runtime_state.busy_lock = None
+    runtime_state.account_service = None
+    runtime_state.rotator = None
+    
+    async def _warmup():
+        try:
+            await client.warmup()
+        except Exception as e:
+            logger.warning("浏览器预热失败: %s", e)
+    warmup_task = asyncio.create_task(_warmup())
+
+    yield
+    logger.info("Shutting down")
+    if warmup_task and not warmup_task.done():
+        warmup_task.cancel()
+    if runtime_state.client is not None:
+        await runtime_state.client.close()
     runtime_state.client = None
     runtime_state.busy_lock = None
     runtime_state.account_service = None
