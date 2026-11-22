@@ -64,7 +64,11 @@ class AIStudioClient:
         """切换账号的 auth 文件。"""
         if self._session is not None:
             await self._session.switch_auth(auth_file)
-
+    async def close(self) -> None:
+        """关闭浏览器会话。"""
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
     def clear_snapshot_cache(self) -> None:
         """清除 snapshot 缓存。"""
         _snapshot_cache.clear()
