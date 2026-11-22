@@ -47,6 +47,11 @@ def _build_cloakbrowser_args(
         else None
     )
     args: list[str] = []
+    args.extend([
+        "--disable-background-networking",
+        "--disable-background-timer-throttling",
+        "--disable-renderer-backgrounding",
+    ])
     if not headless:
         args.append("--start-maximized")
         args.append("--ignore-gpu-blocklist")
