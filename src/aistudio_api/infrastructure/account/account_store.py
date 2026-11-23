@@ -194,6 +194,8 @@ class AccountStore:
     ) -> AccountMeta:
         """保存新账号。"""
         registry = self._load_registry()
+        if not account_id:
+            account_id = None
         now = datetime.now(timezone.utc).isoformat()
         created_at = now
         if account_id is None and email:
