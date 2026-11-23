@@ -35,26 +35,22 @@ async def lifespan(app: FastAPI):
     from aistudio_api.application.account_service import AccountService
     from aistudio_api.application.account_rotator import init_rotator, RotationMode
 
-    client = AIStudioClient(
-        port=runtime_state.browser_port,
-    )
+    client = AIStudioClient(port=runtime_state.browser_port)
     runtime_state.client = client
-    from aistudio_api.config import settings as app_settings
-    runtime_state.busy_lock = asyncio.Semaphore(app_settings.max_concurrency)
 
-    # 注入 snapshot 缓存引用，切号时需要清除
+    runtime_state.busy_lock = asyncio.Semaphore(settings.max_concurrency)
+
     from aistudio_api.infrastructure.gateway.client import _snapshot_cache
     runtime_state.snapshot_cache = _snapshot_cache
 
-    # 初始化账号管理服务
     account_store = AccountStore()
     login_service = LoginService(port=settings.login_browser_port)
     account_service = AccountService(account_store, login_service)
     runtime_state.account_service = account_service
 
-    # 初始化账号轮询器
     rotation_mode = getattr(settings, "account_rotation_mode", "round_robin")
     cooldown = getattr(settings, "account_cooldown_seconds", 60)
+
     rotator = init_rotator(
         account_store,
         mode=RotationMode(rotation_mode),
@@ -69,43 +65,34 @@ async def lifespan(app: FastAPI):
         rotator.mode,
         len(account_store.list_accounts()),
     )
-    # 后台预热浏览器，避免首次请求延迟
-    warmup_task = None
+
     async def _warmup():
         try:
             await client.warmup()
         except Exception as e:
             logger.warning("浏览器预热失败: %s", e)
+
     warmup_task = asyncio.create_task(_warmup())
 
     yield
+
     logger.info("Shutting down")
+
     if warmup_task and not warmup_task.done():
         warmup_task.cancel()
-    if runtime_state.client is not None:
-        await runtime_state.client.close()
-    runtime_state.client = None
-    runtime_state.busy_lock = None
-    runtime_state.account_service = None
-    runtime_state.rotator = None
-    
-    async def _warmup():
         try:
-            await client.warmup()
-        except Exception as e:
-            logger.warning("浏览器预热失败: %s", e)
-    warmup_task = asyncio.create_task(_warmup())
+            await warmup_task
+        except asyncio.CancelledError:
+            pass
 
-    yield
-    logger.info("Shutting down")
-    if warmup_task and not warmup_task.done():
-        warmup_task.cancel()
     if runtime_state.client is not None:
         await runtime_state.client.close()
+
     runtime_state.client = None
     runtime_state.busy_lock = None
     runtime_state.account_service = None
     runtime_state.rotator = None
+
 
 
 app = FastAPI(title="AI Studio API", lifespan=lifespan)
