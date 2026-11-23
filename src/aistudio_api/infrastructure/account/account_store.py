@@ -200,7 +200,7 @@ class AccountStore:
         created_at = now
         if account_id is None and email:
             for acc in registry.accounts.values():
-                if acc.email == email:
+                if acc.email == email and acc.id:
                     account_id = acc.id
                     created_at = acc.created_at
                     break
